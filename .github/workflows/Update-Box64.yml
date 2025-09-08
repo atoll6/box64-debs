@@ -66,7 +66,7 @@ jobs:
           cmake .. -D${TARGET}=1 -DARM_DYNAREC=ON -DBOX32=ON -DBOX32_BINFMT=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
           make -j$(nproc)
           # Create .deb with checkinstall
-          VERSION="${LATEST_RELEASE}"
+          VERSION=$(echo "$LATEST_RELEASE" | sed 's/^v//')
           sudo checkinstall -D --pkgname=box64-${TARGET,,} --pkgversion=$VERSION --pkgarch=arm64 --maintainer="atoll6" --provides=box64 --conflicts=box64 make install
           mv *.deb $GITHUB_WORKSPACE/debian/
           # Mark success
