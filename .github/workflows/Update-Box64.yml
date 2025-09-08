@@ -29,6 +29,7 @@ jobs:
       # Clear all existing .deb files to start fresh for new releases
       - name: Clear old releases
         run: |
+          mkdir -p $GITHUB_WORKSPACE/debian
           rm -f $GITHUB_WORKSPACE/debian/*.deb
       
       # Install dependencies and build latest release
