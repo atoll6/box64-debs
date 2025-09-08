@@ -1,21 +1,32 @@
 name: Update-box64
 
-# Controls when the workflow will run
 on:
   schedule:
-     - cron: '0 1 * * *'
+    - cron: '0 1 * * *'
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+permissions:
+  contents: write
+
+concurrency:
+  group: box64-update
+  cancel-in-progress: true
+
+env:
+  DEBIAN_DIR: debian
+  TARGET: RPI5ARM64
+  PKG_NAME: box64-rpi5arm64
+  GPG_KEY_EMAIL: atoll6@users.noreply.github.com
+
 jobs:
   update-box64:
-    # The type of runner that the job will run on
     runs-on: ubuntu-24.04-arm
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out the repository under $GITHUB_WORKSPACE, so the job can access it
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       # Import GPG key
       - name: Import GPG key
@@ -24,68 +35,160 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
-      
-      # Clear all existing .deb files to start fresh for new releases
-      - name: Clear old releases
+
+      # Check latest upstream release
+      - name: Check latest upstream release
+        id: check
+        shell: bash
         run: |
-          mkdir -p $GITHUB_WORKSPACE/debian
-          rm -f $GITHUB_WORKSPACE/debian/*.deb
-      
-      # Install dependencies and build latest release
-      - name: Install dependencies and build
-        run: |
-          set -e
-          # Install build dependencies
-          sudo apt-get update
-          sudo apt-get install -y cmake git checkinstall binutils build-essential curl jq python3
-          # Configure git
-          mkdir -p /tmp/box64-build
-          git config --global --add safe.directory "/tmp/box64-build"
-          # Get latest release tag from upstream
-          LATEST_RELEASE=$(curl -s https://api.github.com/repos/ptitSeb/box64/releases/latest | jq -r '.tag_name')
-          if [ -z "$LATEST_RELEASE" ]; then
-            echo "No release found, exiting"
+          set -euo pipefail
+          
+          # Fetch the latest release tag from the upstream GitHub API
+          echo "Fetching latest release from ptitSeb/box64..."
+          LATEST_RELEASE="$(curl -fsSL https://api.github.com/repos/ptitSeb/box64/releases/latest | jq -r '.tag_name // empty')"
+          
+          # Exit if no release tag was found
+          if [ -z "${LATEST_RELEASE:-}" ]; then
+            echo "Error: Failed to retrieve the latest upstream release tag."
             exit 1
           fi
-          # Check if release is new
-          RELEASE_FILE="$GITHUB_WORKSPACE/last_release.txt"
-          if [ -f "$RELEASE_FILE" ] && [ "$(cat $RELEASE_FILE)" == "$LATEST_RELEASE" ]; then
-            echo "No new release, skipping build"
-            exit 0
+          
+          # Read the previously stored release tag (or empty if file doesn't exist)
+          echo "Checking current stored release..."
+          CURRENT="$(cat "$GITHUB_WORKSPACE/last_release.txt" 2>/dev/null || true)"
+          
+          # Determine if the release has changed
+          CHANGED="false"
+          if [ "$LATEST_RELEASE" != "$CURRENT" ]; then
+            CHANGED="true"
+            echo "New release detected: $LATEST_RELEASE (previous: ${CURRENT:-none})"
+          else
+            echo "No new release; current is up to date: $LATEST_RELEASE"
           fi
-          echo "$LATEST_RELEASE" > $RELEASE_FILE
-          # Clone box64 at the release tag
-          cd /tmp/box64-build
-          git clone --branch $LATEST_RELEASE --depth 1 https://github.com/ptitSeb/box64.git box64-src
-          cd box64-src
-          # Build for one target (RPI5ARM64)
-          TARGET="RPI5ARM64"
-          mkdir -p build_$TARGET
-          cd build_$TARGET
+          
+          # Validate the tag format (expected: vX.Y.Z)
+          if [[ ! "$LATEST_RELEASE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Unexpected tag format '$LATEST_RELEASE'. Expected format: vX.Y.Z"
+            exit 1
+          fi
+          
+          # Extract version without 'v' prefix for later use
+          VERSION_NO_V="${LATEST_RELEASE#v}"
+          
+          # Output values for use in subsequent steps
+          {
+            echo "latest_release=$LATEST_RELEASE"
+            echo "version=$VERSION_NO_V"
+            echo "changed=$CHANGED"
+          } >> "$GITHUB_OUTPUT"
+          
+          echo "Summary: Upstream release is $LATEST_RELEASE (changed: $CHANGED)"
+
+      # Prepare workspace
+      - name: Prepare workspace
+        if: steps.check.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$DEBIAN_DIR"
+          rm -f "$DEBIAN_DIR"/*.deb
+
+      # Install dependencies and build latest release
+      - name: Install build and repo tooling
+        if: steps.check.outputs.changed == 'true'
+        shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake git checkinstall binutils build-essential curl jq python3 \
+            dpkg-dev apt-utils ca-certificates
+
+      # Build box64 (${{ env.TARGET }})
+      - name: Build box64 (${{ env.TARGET }})
+        if: steps.check.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORKDIR="$(mktemp -d)"
+          git config --global --add safe.directory "$WORKDIR"
+          echo "${{ steps.check.outputs.latest_release }}" > "$GITHUB_WORKSPACE/last_release.txt"
+
+          git clone --branch "${{ steps.check.outputs.latest_release }}" --depth 1 https://github.com/ptitSeb/box64.git "$WORKDIR/box64-src"
+          cd "$WORKDIR/box64-src"
+          mkdir -p "build_${TARGET}"
+          cd "build_${TARGET}"
           cmake .. -D${TARGET}=1 -DARM_DYNAREC=ON -DBOX32=ON -DBOX32_BINFMT=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
-          make -j$(nproc)
-          # Create .deb with checkinstall
-          VERSION=$(echo "$LATEST_RELEASE" | sed 's/^v//')
-          sudo checkinstall -D --pkgname=box64-${TARGET,,} --pkgversion=$VERSION --pkgarch=arm64 --maintainer="atoll6" --provides=box64 --conflicts=box64 make install
-          mv *.deb $GITHUB_WORKSPACE/debian/
+          make -j"$(nproc)"
+
+          PKG_VER="${{ steps.check.outputs.version }}"
+          sudo checkinstall -D --pkgname="${PKG_NAME}" --pkgversion="${PKG_VER}" --pkgarch=arm64 \
+            --maintainer="atoll6" --provides=box64 --conflicts=box64 --install=no \
+            make install
+          mv ./*.deb "$GITHUB_WORKSPACE/$DEBIAN_DIR/"
 
       # Update Debian Repository (rebuild metadata)
-      - name: Update Debian Repository
+      - name: Update Debian repository metadata
+        if: steps.check.outputs.changed == 'true'
+        shell: bash
         run: |
-          cd $GITHUB_WORKSPACE/debian
+          set -euo pipefail
+          cd "$DEBIAN_DIR"
           rm -f Packages Packages.gz Release Release.gpg InRelease
           dpkg-scanpackages --multiversion . > Packages
           gzip -k -f Packages
           apt-ftparchive release . > Release
-          gpg --default-key "atoll6@users.noreply.github.com" --batch --pinentry-mode="loopback" --passphrase="${{ secrets.PASSPHRASE }}" -abs -o - Release > Release.gpg || echo "Failed to sign Release.gpg"
-          gpg --default-key "atoll6@users.noreply.github.com" --batch --pinentry-mode="loopback" --passphrase="${{ secrets.PASSPHRASE }}" --clearsign -o - Release > InRelease || echo "Failed to sign InRelease"
+          gpg --default-key "${GPG_KEY_EMAIL}" --batch --pinentry-mode="loopback" --passphrase="${{ secrets.PASSPHRASE }}" -abs -o - Release > Release.gpg || echo "Failed to sign Release.gpg"
+          gpg --default-key "${GPG_KEY_EMAIL}" --batch --pinentry-mode="loopback" --passphrase="${{ secrets.PASSPHRASE }}" --clearsign -o - Release > InRelease || echo "Failed to sign InRelease"
+          if [ ! -f Release.gpg ] || [ ! -f InRelease ]; then
+            echo "GPG signing failed; aborting."
+            exit 1
+          fi
 
       # Upload (commit and push changes)
-      - name: Upload
+      - name: Commit and push repo updates
+        if: steps.check.outputs.changed == 'true'
+        shell: bash
         run: |
-          cd $GITHUB_WORKSPACE
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          git add .
-          git commit -m "Update box64 to latest release" || true
+          git add -A
+          git commit -m "box64 ${TARGET} ${{
+            steps.check.outputs.latest_release
+          }}: update deb and repo metadata" || echo "Nothing to commit"
           git push
+
+      # Detect newest deb and extract upstream version for tagging
+      - name: Locate built deb
+        if: steps.check.outputs.changed == 'true'
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=( "$GITHUB_WORKSPACE/$DEBIAN_DIR/${PKG_NAME}_"*.deb )
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No deb found."
+            exit 1
+          fi
+          deb="$(ls -1t "${files[@]}" | head -n1)"
+          echo "deb_path=$deb" >> "$GITHUB_OUTPUT"
+          echo "Found deb: $deb"
+
+      # Create/Update GitHub Release
+      - name: Create/Update GitHub Release
+        if: steps.check.outputs.changed == 'true'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.check.outputs.latest_release }}
+          name: box64 ${{ steps.check.outputs.version }} (RPI5ARM64)
+          artifacts: ${{ steps.meta.outputs.deb_path }}
+          artifactContentType: application/vnd.debian.binary-package
+          allowUpdates: true
+          generateReleaseNotes: true
+          draft: false
+          prerelease: false
