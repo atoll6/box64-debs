@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force a complete rebuild even if no new release is detected'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -86,7 +92,7 @@ jobs:
 
       # Prepare workspace
       - name: Prepare workspace
-        if: steps.check.outputs.changed == 'true'
+        if: steps.check.outputs.changed == 'true' || inputs.force_rebuild == true
         shell: bash
         run: |
           set -euo pipefail
@@ -95,7 +101,7 @@ jobs:
 
       # Install dependencies and build latest release
       - name: Install build and repo tooling
-        if: steps.check.outputs.changed == 'true'
+        if: steps.check.outputs.changed == 'true' || inputs.force_rebuild == true
         shell: bash
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -108,7 +114,7 @@ jobs:
 
       # Build box64 (${{ env.TARGET }})
       - name: Build box64 (${{ env.TARGET }})
-        if: steps.check.outputs.changed == 'true'
+        if: steps.check.outputs.changed == 'true' || inputs.force_rebuild == true
         shell: bash
         run: |
           set -euo pipefail
@@ -131,7 +137,7 @@ jobs:
 
       # Update Debian Repository (rebuild metadata)
       - name: Update Debian repository metadata
-        if: steps.check.outputs.changed == 'true'
+        if: steps.check.outputs.changed == 'true' || inputs.force_rebuild == true
         shell: bash
         run: |
           set -euo pipefail
@@ -149,7 +155,7 @@ jobs:
 
       # Upload (commit and push changes)
       - name: Commit and push repo updates
-        if: steps.check.outputs.changed == 'true'
+        if: steps.check.outputs.changed == 'true' || inputs.force_rebuild == true
         shell: bash
         run: |
           set -euo pipefail
@@ -164,7 +170,7 @@ jobs:
 
       # Detect newest deb and extract upstream version for tagging
       - name: Locate built deb
-        if: steps.check.outputs.changed == 'true'
+        if: steps.check.outputs.changed == 'true' || inputs.force_rebuild == true
         id: meta
         shell: bash
         run: |
@@ -181,7 +187,7 @@ jobs:
 
       # Create/Update GitHub Release
       - name: Create/Update GitHub Release
-        if: steps.check.outputs.changed == 'true'
+        if: steps.check.outputs.changed == 'true' || inputs.force_rebuild == true
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.check.outputs.latest_release }}
