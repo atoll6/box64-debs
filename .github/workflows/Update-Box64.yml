@@ -4,7 +4,6 @@ name: Update-box64
 on:
   schedule:
      - cron: '0 1 * * *'
-  # Allows running this workflow manually from the Actions tab
   workflow_dispatch:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
@@ -40,7 +39,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake git checkinstall binutils build-essential curl jq python3
           # Configure git
-          git config --global --add safe.directory $GITHUB_WORKSPACE
+          mkdir -p /tmp/box64-build
+          git config --global --add safe.directory "/tmp/box64-build"
           # Get latest release tag from upstream
           LATEST_RELEASE=$(curl -s https://api.github.com/repos/ptitSeb/box64/releases/latest | jq -r '.tag_name')
           if [ -z "$LATEST_RELEASE" ]; then
@@ -51,12 +51,11 @@ jobs:
           RELEASE_FILE="$GITHUB_WORKSPACE/last_release.txt"
           if [ -f "$RELEASE_FILE" ] && [ "$(cat $RELEASE_FILE)" == "$LATEST_RELEASE" ]; then
             echo "No new release, skipping build"
-            touch $GITHUB_WORKSPACE/exited_successfully.txt
             exit 0
           fi
           echo "$LATEST_RELEASE" > $RELEASE_FILE
           # Clone box64 at the release tag
-          cd $GITHUB_WORKSPACE
+          cd /tmp/box64-build
           git clone --branch $LATEST_RELEASE --depth 1 https://github.com/ptitSeb/box64.git box64-src
           cd box64-src
           # Build for one target (RPI5ARM64)
@@ -69,8 +68,6 @@ jobs:
           VERSION=$(echo "$LATEST_RELEASE" | sed 's/^v//')
           sudo checkinstall -D --pkgname=box64-${TARGET,,} --pkgversion=$VERSION --pkgarch=arm64 --maintainer="atoll6" --provides=box64 --conflicts=box64 make install
           mv *.deb $GITHUB_WORKSPACE/debian/
-          # Mark success
-          touch $GITHUB_WORKSPACE/exited_successfully.txt
 
       # Update Debian Repository (rebuild metadata)
       - name: Update Debian Repository
