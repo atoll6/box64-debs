@@ -2,8 +2,6 @@ name: Update-box64
 
 # Controls when the workflow will run
 on:
-  push:
-    branches: [master]
   schedule:
      - cron: '0 1 * * *'
   workflow_dispatch:
@@ -30,6 +28,7 @@ jobs:
       # Clear all existing .deb files to start fresh for new releases
       - name: Clear old releases
         run: |
+          mkdir -p $GITHUB_WORKSPACE/debian
           rm -f $GITHUB_WORKSPACE/debian/*.deb
       
       # Install dependencies and build latest release
