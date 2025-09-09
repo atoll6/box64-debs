@@ -6,10 +6,10 @@ Installed-Size: 40116
 Conflicts: box64
 Provides: box64
 Filename: ./box64-rpi5arm64_0.3.6-1_arm64.deb
-Size: 9301890
-MD5sum: 705504b35b8a47a0b3291e6136841d13
-SHA1: f26b7f1669a7d0f0c126c3f1e0caabba6bc5e7e5
-SHA256: 4e3b23f34ef58684120e2ed48dfc1f40637873b3ada129832f776af8fbfd6d16
+Size: 9302382
+MD5sum: e5ae11712194ff690bd2dcf5e1a3a7c1
+SHA1: 6fe1db1051b0de11afd63ba1ca21d3fea9e4c3a7
+SHA256: 66587be8d4c29d80569423e0c29f43916ae6289d4fd40aefd5659b0c293fb9b6
 Section: checkinstall
 Priority: extra
 Description: Package created with checkinstall 1.6.3
