@@ -4,7 +4,17 @@ Debian packages for [box64](https://github.com/ptitSeb/box64) built for Raspberr
 
 ## Installation
 
-### APT Repository (Recommended)
+### Automated Script (Recommended)
+
+For the easiest installation, run the automated script:
+
+```bash
+wget -qO- https://atoll6.github.io/box64-debs/install.sh | bash
+```
+
+This script will automatically set up the APT repository and install box64.
+
+### APT Repository
 Add the repository for automatic updates:
 
 ```bash
