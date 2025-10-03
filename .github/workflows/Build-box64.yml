@@ -5,20 +5,35 @@ on:
         - cron: '0 1 * * *'
     workflow_dispatch:
 
+env:
+  UPSTREAM: ptitSeb/box64
+
 jobs:
     compare-upstream-downstream:
         runs-on: ubuntu-24.04-arm
         steps:
-            - name: Get Latest Release
+            - name: Get Upstream Release
               id: upstream
               uses: pozetroninc/github-action-get-latest-release@master
               with:
-                owner: ptitSeb
-                repo: box64
+                repository: ${{ env.UPSTREAM }}
                 excludes: prerelease, draft
-            - name: Get Latest Release
+            - name: Get Downstream Release
               id: downstream
               uses: pozetroninc/github-action-get-latest-release@master
               with:
                 repository: ${{github.repository}}
                 excludes: prerelease, draft
+            - name: Compare
+              id: compare
+              run: |
+                if [ "${{ steps.upstream.outputs.release }}" == "${{ steps.downstream.outputs.release }}" ]; then
+                  echo "The latest release has already been built."
+                  echo "build=false" >> "$GITHUB.OUTPUT"
+                else
+                  echo "A new release is available!"
+                  {
+                    echo "build=true"
+                    echo "version=${{ steps.upstream.outputs.release }}"
+                  } >> "$GITHUB.OUTPUT"
+                fi
