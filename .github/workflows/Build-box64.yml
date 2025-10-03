@@ -6,8 +6,8 @@ on:
     workflow_dispatch:
 
 jobs:
-    check-upstream:
-        runs-on: ubuntu-latest
+    compare-upstream-downstream:
+        runs-on: ubuntu-24.04-arm
         steps:
             - name: Get Latest Release
               id: upstream
@@ -16,8 +16,9 @@ jobs:
                 owner: ptitSeb
                 repo: box64
                 excludes: prerelease, draft
-            - name: Print Info
-              run: |
-                echo "Latest release ${{steps.upstream.outputs.release}}"
-                echo "Release id: ${{steps.upstream.outputs.id}}"
-                echo "Release description: ${{steps.upstream.outputs.description}}"
+            - name: Get Latest Release
+              id: downstream
+              uses: pozetroninc/github-action-get-latest-release@master
+              with:
+                repository: ${{github.repository}}
+                excludes: prerelease, draft
