@@ -1,0 +1,23 @@
+name: Build-box64
+
+on:
+    schedule:
+        - cron: '0 1 * * *'
+    workflow_dispatch:
+
+jobs:
+    check-upstream:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Get Latest Release
+              id: upstream
+              uses: pozetroninc/github-action-get-latest-release@master
+              with:
+                owner: ptitSeb
+                repo: box64
+                excludes: prerelease, draft
+            - name: Print Info
+              run: |
+                echo "Latest release ${{steps.upstream.outputs.release}}"
+                echo "Release id: ${{steps.upstream.outputs.id}}"
+                echo "Release description: ${{steps.upstream.outputs.description}}"
