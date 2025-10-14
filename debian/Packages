@@ -1,15 +1,15 @@
 Package: box64-rpi5arm64
-Version: 0.3.6-1
+Version: 0.3.8-1
 Architecture: arm64
 Maintainer: atoll6
-Installed-Size: 40116
+Installed-Size: 40888
 Conflicts: box64
 Provides: box64
-Filename: ./box64-rpi5arm64_0.3.6-1_arm64.deb
-Size: 9302382
-MD5sum: e5ae11712194ff690bd2dcf5e1a3a7c1
-SHA1: 6fe1db1051b0de11afd63ba1ca21d3fea9e4c3a7
-SHA256: 66587be8d4c29d80569423e0c29f43916ae6289d4fd40aefd5659b0c293fb9b6
+Filename: ./box64-rpi5arm64_0.3.8-1_arm64.deb
+Size: 9427256
+MD5sum: ff2fa3abf7b95c4477ab54c7e5ccfa1c
+SHA1: b1c5d40be3f7f176d1fa47fc777b5d1310bba3ba
+SHA256: 659c65dc18d33d9c1188b5a51770b2961dbd0e391dc66b3747bd6bb4314d4b5c
 Section: checkinstall
 Priority: extra
 Description: Package created with checkinstall 1.6.3
